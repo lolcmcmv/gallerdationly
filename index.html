@@ -21,7 +21,7 @@
             flex-direction: column;
             align-items: center;
             padding: 20px;
-            margin-top: 60px; /* Space for back button */
+            margin-top: 20px;
         }
         img {
             max-width: 600px;
@@ -123,22 +123,35 @@
         .back-button {
             background-color: #6a1b9a; /* Purple */
             color: white;
+            display: none; /* Initially hidden */
         }
         .back-button:hover {
             background-color: #4a148c; /* Darker purple */
         }
-        .upload-button:hover,
-        .prev-next-button:hover,
-        .delete-button:hover,
-        .all-photos-button:hover {
-            opacity: 0.9;
+        .password-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .password-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <button class="back-button" onclick="goBack()" style="display:none;">Back</button>
+    <button class="back-button" onclick="goBack()">Back</button>
 </div>
 
 <div class="gallery" id="main-gallery">
@@ -146,106 +159,36 @@
     <div>
         <button class="prev-next-button" onclick="showPrevImage()">Previous</button>
         <button class="prev-next-button" onclick="showNextImage()">Next</button>
-        <button class="upload-button" onclick="uploadImage()">Upload Image</button>
-        <button class="delete-button" onclick="deleteImage()">Delete Image</button>
+        <button class="upload-button" onclick="showPasswordModal('upload')">Upload Image</button>
+        <button class="delete-button" onclick="showPasswordModal('delete')">Delete Image</button>
         <button class="all-photos-button" onclick="showAllPhotos()">All Photos</button>
     </div>
 </div>
 
-<div id="all-photos-container" class="all-photos" style="display: none;"></div>
+<div class="all-photos" id="all-photos-container" style="display: none;"></div>
 
-<div id="fullscreen-container" class="fullscreen-image" onclick="closeFullscreen()">
-    <button class="close-button">&times;</button>
-    <img id="fullscreen-image" src="" alt="Full Screen Image">
+<div class="fullscreen-image" id="fullscreen-container" onclick="closeFullscreen()">
+    <img id="fullscreen-image" src="" alt="Fullscreen Image">
+</div>
+
+<div class="password-modal" id="password-modal">
+    <div class="password-box">
+        <h3>Enter Password</h3>
+        <input type="password" id="password-input" placeholder="Password">
+        <button onclick="submitPassword()">Submit</button>
+        <button onclick="closePasswordModal()">Cancel</button>
+    </div>
 </div>
 
 <script>
     let imageList = [];
     let currentIndex = 0;
-    const correctPassword = "todahakadoshbaruch1"; // Set the correct password
-    let isUploadAuthenticated = false; // Track upload authentication status
-    let isDeleteAuthenticated = false; // Track delete authentication status
-
-    // Load images from local storage when the page is loaded
-    window.onload = function() {
-        const storedImages = JSON.parse(localStorage.getItem('imageList'));
-        if (storedImages) {
-            imageList = storedImages;
-            if (imageList.length > 0) {
-                displayImage(0);
-            }
-        }
-    };
-
-    function uploadImage() {
-        if (!isUploadAuthenticated) {
-            const password = prompt("Enter the password to upload images:");
-            if (password === correctPassword) {
-                isUploadAuthenticated = true; // Set upload authentication status
-                alert("Password accepted! You can now upload images.");
-            } else {
-                alert("Incorrect password. Please try again.");
-                return; // Exit the function if the password is incorrect
-            }
-        }
-
-        // Allow image upload
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.multiple = true; // Allow multiple files
-        input.onchange = (event) => {
-            const files = event.target.files;
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    imageList.push(e.target.result);
-                    localStorage.setItem('imageList', JSON.stringify(imageList)); // Save to local storage
-                    if (imageList.length === 1) {
-                        // Show the first image if it's the first upload
-                        displayImage(0);
-                    }
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-        input.click();
-    }
-
-    function deleteImage() {
-        if (!isDeleteAuthenticated) {
-            const password = prompt("Enter the password to delete images:");
-            if (password === correctPassword) {
-                isDeleteAuthenticated = true; // Set delete authentication status
-                alert("Password accepted! You can now delete images.");
-            } else {
-                alert("Incorrect password. Please try again.");
-                return; // Exit the function if the password is incorrect
-            }
-        }
-
-        if (imageList.length > 0) {
-            // Remove the current image from the list
-            imageList.splice(currentIndex, 1);
-            // Update the local storage
-            localStorage.setItem('imageList', JSON.stringify(imageList));
-            
-            // Update the current index if necessary
-            if (imageList.length === 0) {
-                document.getElementById('image-display').src = ''; // Clear the image display
-                currentIndex = 0; // Reset index
-            } else {
-                currentIndex = currentIndex % imageList.length; // Ensure index is valid
-                displayImage(currentIndex);
-            }
-        }
-    }
+    let uploadSuccess = false;
+    let deleteSuccess = false;
 
     function displayImage(index) {
-        if (imageList.length > 0) {
-            document.getElementById('image-display').src = imageList[index];
-        }
+        const imageDisplay = document.getElementById('image-display');
+        imageDisplay.src = imageList[index];
     }
 
     function showNextImage() {
@@ -262,40 +205,111 @@
         }
     }
 
-    function showAllPhotos() {
-        const allPhotosContainer = document.getElementById('all-photos-container');
-        allPhotosContainer.innerHTML = ''; // Clear previous content
-        imageList.forEach((src, index) => {
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = `Image ${index + 1}`;
-            img.onclick = () => openFullscreen(src);
-            allPhotosContainer.appendChild(img);
-        });
-        document.getElementById('main-gallery').style.display = 'none';
-        allPhotosContainer.style.display = 'flex';
-        document.querySelector('.back-button').style.display = 'inline-block'; // Show the back button
+    function showPasswordModal(action) {
+        document.getElementById('password-modal').style.display = 'flex';
+        document.getElementById('password-input').dataset.action = action; // Store action in the input
     }
 
-    function openFullscreen(src) {
-        document.getElementById('fullscreen-image').src = src;
-        document.getElementById('fullscreen-container').style.display = 'flex'; // Show fullscreen container
+    function closePasswordModal() {
+        document.getElementById('password-modal').style.display = 'none';
+        document.getElementById('password-input').value = ''; // Clear input
+    }
+
+    function submitPassword() {
+        const password = document.getElementById('password-input').value;
+        const action = document.getElementById('password-input').dataset.action;
+
+        if (password === 'todav') {
+            if (action === 'upload') {
+                uploadSuccess = true;
+                uploadImage();
+            } else if (action === 'delete') {
+                deleteSuccess = true;
+                deleteImage();
+            }
+            closePasswordModal();
+        } else {
+            alert('Incorrect password, please try again.');
+        }
+    }
+
+    function uploadImage() {
+        if (uploadSuccess) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = (event) => {
+                const files = event.target.files;
+                if (files.length > 0) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imageList.push(e.target.result);
+                        if (imageList.length === 1) { // First image
+                            currentIndex = 0;
+                            displayImage(currentIndex);
+                        }
+                    };
+                    reader.readAsDataURL(files[0]);
+                }
+            };
+            input.click();
+        }
+    }
+
+    function deleteImage() {
+        if (deleteSuccess) {
+            if (imageList.length > 0) {
+                imageList.splice(currentIndex, 1); // Remove the current image
+                if (imageList.length === 0) {
+                    document.getElementById('image-display').src = ''; // Clear display
+                } else {
+                    currentIndex = Math.min(currentIndex, imageList.length - 1); // Adjust index
+                    displayImage(currentIndex);
+                }
+            } else {
+                alert('No images to delete.');
+            }
+        }
+    }
+
+    function showAllPhotos() {
+        const allPhotosContainer = document.getElementById('all-photos-container');
+        allPhotosContainer.innerHTML = ''; // Clear previous images
+        imageList.forEach((image, index) => {
+            const img = document.createElement('img');
+            img.src = image;
+            img.alt = 'Photo ' + (index + 1);
+            img.onclick = () => openFullscreen(image);
+            allPhotosContainer.appendChild(img);
+        });
+        allPhotosContainer.style.display = 'flex'; // Show the container
+        document.getElementById('main-gallery').style.display = 'none'; // Hide main gallery
+        document.querySelector('.back-button').style.display = 'inline'; // Show back button
+    }
+
+    function openFullscreen(image) {
+        const fullscreenContainer = document.getElementById('fullscreen-container');
+        fullscreenContainer.style.display = 'flex';
+        document.getElementById('fullscreen-image').src = image;
     }
 
     function closeFullscreen() {
-        document.getElementById('fullscreen-container').style.display = 'none'; // Hide fullscreen container
+        document.getElementById('fullscreen-container').style.display = 'none';
     }
 
     function toggleZoom() {
         const imageDisplay = document.getElementById('image-display');
-        imageDisplay.style.transform = imageDisplay.style.transform === 'scale(1.5)' ? 'scale(1)' : 'scale(1.5)';
-        imageDisplay.style.transition = 'transform 0.3s ease';
+        if (imageDisplay.style.transform === 'scale(1.5)') {
+            imageDisplay.style.transform = 'scale(1)';
+        } else {
+            imageDisplay.style.transform = 'scale(1.5)';
+        }
     }
 
     function goBack() {
-        document.getElementById('main-gallery').style.display = 'flex';
-        document.getElementById('all-photos-container').style.display = 'none';
-        document.querySelector('.back-button').style.display = 'none'; // Hide the back button
+        document.getElementById('all-photos-container').style.display = 'none'; // Hide all photos
+        document.getElementById('main-gallery').style.display = 'flex'; // Show main gallery
+        document.querySelector('.back-button').style.display = 'none'; // Hide back button
     }
 </script>
 
